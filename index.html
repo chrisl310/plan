@@ -9,7 +9,6 @@
 <title>每日执行表</title>
 <link rel="apple-touch-icon" href="icon.png">
 <link rel="icon" href="icon.png">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
 
 <style>
 :root{
@@ -53,6 +52,7 @@ h1{font-size:22px;margin:2px 0 16px;font-weight:600;letter-spacing:.01em}
 .hint{font-size:13px;color:var(--muted);margin-top:10px}
 .streak{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted);margin-top:10px;padding-top:12px;border-top:1px solid var(--line)}
 .streak b{color:var(--gold);font-weight:600;font-size:15px}
+.streak-note{font-size:11.5px;color:var(--muted);opacity:.7;margin-top:5px;padding-left:2px}
 
 /* ── 分区标题 ── */
 .sec{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
@@ -178,6 +178,7 @@ details[open] summary::after{content:"－"}
 
 .foot{text-align:center;font-size:12.5px;color:var(--muted);margin-top:20px;line-height:1.7}
 .foot b{color:var(--accent);font-weight:500}
+.ver{text-align:center;font-size:11px;color:var(--muted);opacity:.55;margin-top:16px;letter-spacing:.04em}
 </style>
 </head>
 <body>
@@ -195,6 +196,7 @@ details[open] summary::after{content:"－"}
   <div class="streak">
     <span>🔥 连续</span><b id="streakCur">0</b><span>天 · 最长</span><b id="streakBest">0</b><span>天</span>
   </div>
+  <div class="streak-note">勾任意一项即算这天打卡，一项没勾就断</div>
   <div class="nostat" id="noStat" hidden></div>
 </div>
 
@@ -258,6 +260,8 @@ details[open] summary::after{content:"－"}
   不补偿、不自责，第二天照常。
 </div>
 
+<div class="ver">v1.4 · 2026-11-02</div>
+
 <script>
 (function(){
   'use strict';
@@ -287,18 +291,18 @@ details[open] summary::after{content:"－"}
       label:'回家先吃早饭，不先坐下', sub:'一个鸡蛋 + 一杯奶，2 分钟' },
     { t:'08:45', type:'anchor', text:'补觉 30 分钟（设闹钟）' },
     { t:'09:30', type:'anchor', text:'开始办公' },
-    { t:'11:00', type:'task', id:'lunch', sec:'bonus',
+    { t:'11:30', type:'task', id:'lunch', sec:'bonus',
       label:'午饭：一荤一素 + 小份主食', sub:'没有剩饭就吃快手版，看下方折叠' },
     { t:'16:30', type:'anchor', text:'接娃' },
     { t:'18:00', type:'task', id:'plate', sec:'core',
       label:'晚饭先给自己盛一盘', sub:'半碗饭 + 1.5 掌蛋白 + 2 拳菜' },
     { t:'19:00', type:'anchor', text:'吃饭：先菜、再肉、最后主食' },
-    { t:'21:00', type:'task', id:'wind', sec:'bonus',
+    { t:'21:30', type:'task', id:'wind', sec:'bonus',
       label:'哄睡时不玩手机', sub:'听播客或闭眼，蓝光会让你越刷越精神' },
-    { t:'22:30', type:'task', id:'snack', sec:'core',
+    { t:'23:00', type:'task', id:'snack', sec:'core',
       label:'宵夜减半，不吃更好', sub:'饮料换无糖；不吃就直接刷牙，之后只喝水' },
-    { t:'24:00', type:'task', id:'light', sec:'core',
-      label:'关灯睡觉', sub:'本周目标 1:30，设个关灯闹钟' }
+    { t:'00:30', type:'task', id:'light', sec:'core',
+      label:'关灯睡觉', sub:'设个关灯闹钟，响了就把手机放下' }
   ];
 
   var WEEKEND_ITEMS = [
@@ -314,9 +318,9 @@ details[open] summary::after{content:"－"}
     { t:'18:00', type:'task', id:'plate', sec:'core',
       label:'晚饭先给自己盛一盘', sub:'半碗饭 + 1.5 掌蛋白 + 2 拳菜' },
     { t:'19:00', type:'anchor', text:'吃饭：先菜、再肉、最后主食' },
-    { t:'21:00', type:'task', id:'wind', sec:'bonus',
+    { t:'21:30', type:'task', id:'wind', sec:'bonus',
       label:'哄睡时不玩手机', sub:'周末更容易拖，蓝光会让你越刷越精神' },
-    { t:'22:30', type:'task', id:'snack', sec:'core',
+    { t:'23:00', type:'task', id:'snack', sec:'core',
       label:'宵夜减半，不吃更好', sub:'饮料换无糖；不吃就直接刷牙，之后只喝水' },
     { t:'01:00', type:'task', id:'light', sec:'core',
       label:'最晚 1 点关灯', sub:'周末可以比工作日晚 1 小时，但不能不设上限' }
@@ -466,11 +470,15 @@ details[open] summary::after{content:"－"}
   }
 
   /* ───────── 进度 & 连续打卡 ───────── */
-  function coreDoneOn(k){
+  // 一天里只要勾了任意一项，这一天就算打卡成功；一项没勾就是断
+  function dayDoneOn(k){
     try {
       var s = JSON.parse(localStorage.getItem(PREFIX + k) || '{}');
       var c = (s && s.checks) || {};
-      return CORE.every(function(id){ return !!c[id]; });
+      for (var id in c){
+        if (c[id]) return true;
+      }
+      return false;
     } catch(e) { return false; }
   }
 
@@ -482,9 +490,9 @@ details[open] summary::after{content:"－"}
 
   function currentStreak(){
     var d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    if (!coreDoneOn(keyOf(d))) d = shiftDay(d, -1);  // 今天还没做完不算断
+    if (!dayDoneOn(keyOf(d))) d = shiftDay(d, -1);  // 今天还没勾过，先不算断
     var n = 0;
-    while (coreDoneOn(keyOf(d)) && n < 3650){
+    while (dayDoneOn(keyOf(d)) && n < 3650){
       n++; d = shiftDay(d, -1);
     }
     return n;
@@ -496,7 +504,7 @@ details[open] summary::after{content:"－"}
       for (var i = 0; i < localStorage.length; i++){
         var k = localStorage.key(i);
         var m = k && /^wplan:(\d{4}-\d{2}-\d{2})$/.exec(k);
-        if (m && coreDoneOn(m[1])) dates.push(m[1]);
+        if (m && dayDoneOn(m[1])) dates.push(m[1]);
       }
     } catch(e) {}
     dates.sort();
